@@ -1,17 +1,24 @@
 {
   "name": "telegram-calendar-app",
   "version": "1.0.0",
-  "description": "Telegram bot with reminders",
+  "description": "Telegram Mini App with reminders",
   "main": "backend/index.js",
   "scripts": {
-    "start": "node backend/index.js"
+    "start": "node backend/index.js",
+    "dev": "nodemon backend/index.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   },
   "dependencies": {
     "express": "^4.18.2",
+    "telegraf": "^4.20.0",
     "body-parser": "^1.20.2",
-    "node-telegram-bot-api": "^0.61.0"
+    "axios": "^1.6.0"
   },
-  "engines": {
-    "node": "22.x"
-  }
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "author": "Mik",
+  "license": "MIT"
 }
