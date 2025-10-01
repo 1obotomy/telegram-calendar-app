@@ -1,61 +1,68 @@
 import express from 'express';
-import { Telegraf } from 'telegraf';
+import bodyParser from 'body-parser';
+import fetch from 'node-fetch';
 
-// ---- Настройки ----
-const BOT_TOKEN = '8381157293:AAHsoo8VMQ9kEmPMCbGbwUO1P17jwmmFM6g';
-const WEBHOOK_URL = 'https://telegram-calendar-app-1.onrender.com';
-const PORT = process.env.PORT || 10000;
-
-const bot = new Telegraf(BOT_TOKEN);
-
-// ---- Миниапп и кнопка ----
-bot.start((ctx) => {
-  ctx.reply('Добро пожаловать в ваш календарь!', {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          {
-            text: 'Открыть миниапп',
-            web_app: { url: `${WEBHOOK_URL}/miniapp` },
-          },
-        ],
-      ],
-    },
-  });
-});
-
-// ---- Пример обработки сообщений ----
-bot.on('text', (ctx) => {
-  ctx.reply('Ваше сообщение получено: ' + ctx.message.text);
-});
-
-// ---- Express сервер ----
 const app = express();
-app.use(express.json());
+const PORT = process.env.PORT || 10000;
+const BOT_TOKEN = '8381157293:AAHsoo8VMQ9kEmPMCbGbwUO1P17jwmmFM6g';
+const WEBAPP_URL = process.env.WEBAPP_URL || `https://your-render-url.com`; // заменить на URL фронта
 
-// Редирект с корня на миниапп
-app.get('/', (req, res) => {
-  res.redirect('/miniapp');
-});
+app.use(bodyParser.json());
+app.use(express.static('public')); // если фронт лежит в public
 
-// Статическая отдача миниаппа
-app.use('/miniapp', express.static('frontend'));
+// Хранилище событий в памяти
+let events = [];
 
-// Webhook endpoint для Telegram
-app.post(`/webhook/${bot.secretPathComponent()}`, (req, res) => {
-  bot.handleUpdate(req.body, res);
+// Вспомогательные функции
+function checkExpiredEvents() {
+  const now = new Date();
+  events = events.filter(ev => {
+    if (!ev.repeat) {
+      const evDateTime = new Date(`${ev.date}T${ev.time}`);
+      return evDateTime >= now;
+    }
+    return true; // повторяемые события не удаляем автоматически
+  });
+}
+
+function sendWebAppMessage(chat_id, message) {
+  return fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id,
+      text: message
+    })
+  });
+}
+
+// Webhook для Telegram
+app.post(`/webhook/${BOT_TOKEN}`, (req, res) => {
+  const update = req.body;
+
+  if (update.message && update.message.text === '/start') {
+    const chat_id = update.message.chat.id;
+    sendWebAppMessage(chat_id, `Добро пожаловать! Открывайте миниапп для работы с событиями: ${WEBAPP_URL}`);
+  }
+
   res.sendStatus(200);
 });
 
-// Запуск сервера
-app.listen(PORT, async () => {
-  console.log(`Server started on port ${PORT}`);
+// API для фронтенда
+app.post('/api/saveEvent', (req, res) => {
+  const { title, date, time, repeat, days } = req.body;
+  if (!title || !date || !time) return res.status(400).json({ error: 'Не все поля заполнены' });
 
-  // Устанавливаем webhook
-  try {
-    await bot.telegram.setWebhook(`${WEBHOOK_URL}/webhook/${bot.secretPathComponent()}`);
-    console.log('Webhook установлен!');
-  } catch (err) {
-    console.error('Ошибка установки webhook:', err);
-  }
+  events.push({ title, date, time, repeat, days });
+  checkExpiredEvents();
+  res.json({ success: true, events });
+});
+
+app.get('/api/events', (req, res) => {
+  checkExpiredEvents();
+  res.json(events);
+});
+
+app.listen(PORT, () => {
+  console.log(`Server started on port ${PORT}`);
 });
