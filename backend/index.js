@@ -1,55 +1,57 @@
-import express from "express";
-import bodyParser from "body-parser";
-import TelegramBot from "node-telegram-bot-api";
-import { addReminder, getReminders } from "./reminders.js";
-import path from "path";
-import { fileURLToPath } from "url";
+const express = require('express');
+const bodyParser = require('body-parser');
+const TelegramBot = require('node-telegram-bot-api');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const TOKEN = process.env.TOKEN;
+const GROUP_ID = process.env.GROUP_ID;
+const URL = process.env.URL;
+const PORT = process.env.PORT || 10000;
+
+if (!TOKEN || !GROUP_ID || !URL) {
+  console.error('ERROR: TOKEN, GROUP_ID или URL не установлены');
+  process.exit(1);
+}
 
 const app = express();
 app.use(bodyParser.json());
 
-const TOKEN = process.env.TOKEN;
-const GROUP_ID = process.env.GROUP_ID;
-const URL = process.env.URL; // URL сервиса Render
+const bot = new TelegramBot(TOKEN, { webHook: true });
+bot.setWebHook(`${URL}/bot${TOKEN}`);
 
-// создаём бот без polling
-const bot = new TelegramBot(TOKEN);
+let reminders = [];
 
-// устанавливаем webhook
-await bot.setWebHook(`${URL}/bot${TOKEN}`);
-console.log(`Webhook установлен на ${URL}/bot${TOKEN}`);
-
-// маршрут для получения апдейтов от Telegram
 app.post(`/bot${TOKEN}`, (req, res) => {
   bot.processUpdate(req.body);
   res.sendStatus(200);
 });
 
-// создание напоминания
-app.post("/reminder", (req, res) => {
-  const { text, dateTime } = req.body;
+bot.onText(/\/start/, (msg) => {
+  bot.sendMessage(msg.chat.id, 'Привет! Я календарь-бот. Добавляй напоминания!');
+});
 
-  if (!text || !dateTime) {
-    return res.status(400).json({ error: "Текст и дата обязательны" });
-  }
+bot.onText(/\/add (.+)/, (msg, match) => {
+  const text = match[1];
+  const time = Date.now() + 60000; // через 1 минуту
+  reminders.push({ text, time, sent: false });
+  bot.sendMessage(msg.chat.id, `Напоминание "${text}" добавлено!`);
+});
 
-  addReminder(text, dateTime, () => {
-    bot.sendMessage(GROUP_ID, `🔔 Напоминание: ${text}`);
+setInterval(() => {
+  const now = Date.now();
+  reminders.forEach(r => {
+    if (!r.sent && r.time <= now) {
+      bot.sendMessage(GROUP_ID, `⏰ Напоминание: ${r.text}`);
+      r.sent = true;
+    }
   });
+}, 10000);
 
-  res.json({ status: "ok", message: "Напоминание установлено" });
+bot.onText(/\/list/, (msg) => {
+  if (!reminders.length) return bot.sendMessage(msg.chat.id, 'Нет напоминаний.');
+  const list = reminders.map(r => `${r.sent ? '✅' : '🕒'} ${r.text}`).join('\n');
+  bot.sendMessage(msg.chat.id, list);
 });
 
-// список напоминаний
-app.get("/reminders", (req, res) => {
-  res.json(getReminders());
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
-
-// фронтенд
-app.use(express.static(path.join(__dirname, "../frontend")));
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
