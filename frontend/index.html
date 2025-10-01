@@ -2,123 +2,129 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Telegram Calendar Mini App</title>
-  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Telegram Calendar MiniApp</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 10px; max-width: 600px; margin: auto; }
-    input, select, button { display: block; margin: 5px 0; padding: 6px; width: 100%; box-sizing: border-box; }
-    label { font-weight: bold; margin-top: 10px; }
-    #repeat-options { margin-top: 5px; }
-    .days-checkboxes label { display: inline-block; margin-right: 5px; font-weight: normal; }
-    #calendar { margin-top: 20px; }
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1 { font-size: 24px; }
+    label { display: block; margin-top: 10px; }
+    input, select { margin-top: 5px; width: 100%; padding: 5px; }
+    button { margin-top: 10px; padding: 10px 15px; cursor: pointer; transition: transform 0.1s; }
+    button:active { transform: scale(0.95); background-color: #ddd; }
+    .event { border: 1px solid #ddd; padding: 10px; margin-top: 10px; border-radius: 5px; position: relative; }
+    .repeat { font-size: 12px; color: gray; }
+    .delete-btn { position: absolute; top: 5px; right: 5px; cursor: pointer; color: red; background: none; border: none; font-weight: bold; }
   </style>
 </head>
 <body>
   <h1>Календарь событий</h1>
 
-  <label>Название события</label>
-  <input type="text" id="event-name" placeholder="Введите название">
+  <div>
+    <label>Название события
+      <input type="text" id="eventTitle" placeholder="Введите название">
+    </label>
 
-  <label>Дата</label>
-  <input type="date" id="event-date">
+    <label>Дата
+      <input type="date" id="eventDate">
+    </label>
 
-  <label>Время</label>
-  <input type="time" id="event-time">
+    <label>Время
+      <input type="time" id="eventTime">
+    </label>
 
-  <label><input type="checkbox" id="repeat-event"> Повторяемое событие</label>
+    <label>
+      <input type="checkbox" id="isRepeat"> Повторяемое событие
+    </label>
 
-  <div id="repeat-options" style="display:none;">
-    <label>Выберите дни недели:</label>
-    <div class="days-checkboxes">
-      <label><input type="checkbox" value="1">Пн</label>
-      <label><input type="checkbox" value="2">Вт</label>
-      <label><input type="checkbox" value="3">Ср</label>
-      <label><input type="checkbox" value="4">Чт</label>
-      <label><input type="checkbox" value="5">Пт</label>
-      <label><input type="checkbox" value="6">Сб</label>
-      <label><input type="checkbox" value="0">Вс</label>
+    <div id="repeatOptions" style="display:none; margin-top:10px;">
+      <label>Повторять каждую неделю:
+        <select id="repeatDays" multiple>
+          <option value="Пн">Пн</option>
+          <option value="Вт">Вт</option>
+          <option value="Ср">Ср</option>
+          <option value="Чт">Чт</option>
+          <option value="Пт">Пт</option>
+          <option value="Сб">Сб</option>
+          <option value="Вс">Вс</option>
+        </select>
+      </label>
     </div>
+
+    <button id="addEvent">Сохранить событие</button>
   </div>
 
-  <button id="save-btn">Сохранить событие</button>
+  <h2>Сохранённые события</h2>
+  <div id="eventList"></div>
 
-  <div id="calendar"></div>
-
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
   <script>
-    const tg = window.Telegram.WebApp;
-    tg.ready();
+    const isRepeat = document.getElementById('isRepeat');
+    const repeatOptions = document.getElementById('repeatOptions');
+    const addEventBtn = document.getElementById('addEvent');
+    const eventList = document.getElementById('eventList');
 
-    const repeatCheckbox = document.getElementById('repeat-event');
-    const repeatOptions = document.getElementById('repeat-options');
-    const saveBtn = document.getElementById('save-btn');
-    const calendarEl = document.getElementById('calendar');
-
-    let events = [];
-
-    repeatCheckbox.addEventListener('change', () => {
-      repeatOptions.style.display = repeatCheckbox.checked ? 'block' : 'none';
+    isRepeat.addEventListener('change', () => {
+      repeatOptions.style.display = isRepeat.checked ? 'block' : 'none';
     });
 
-    const calendar = new FullCalendar.Calendar(calendarEl, {
-      initialView: 'dayGridMonth',
-      editable: true,
-      selectable: true,
-      events: [],
-      eventClick: function(info) {
-        if (confirm(`Удалить событие "${info.event.title}"?`)) {
-          info.event.remove();
-          events = events.filter(e => e.id !== info.event.id);
-        }
-      }
-    });
-    calendar.render();
+    const events = [];
 
-    function addEventToCalendar(ev) {
-      let eventData = {
-        id: String(events.length + 1),
-        title: ev.name + (ev.repeat ? ' 🔁' : ''),
-        start: `${ev.date}T${ev.time}`,
-        allDay: false,
-        backgroundColor: ev.repeat ? '#007bff' : '#28a745'
-      };
-      calendar.addEvent(eventData);
+    function checkExpiredEvents() {
+      const now = new Date();
+      return events.filter(ev => {
+        const evDateTime = new Date(`${ev.date}T${ev.time}`);
+        // Удаляем не повторяемые события из прошлого
+        if (!ev.repeat && evDateTime < now) return false;
+        return true;
+      });
     }
 
-    saveBtn.addEventListener('click', () => {
-      const name = document.getElementById('event-name').value.trim();
-      const date = document.getElementById('event-date').value;
-      const time = document.getElementById('event-time').value;
-      const repeat = repeatCheckbox.checked;
-      const days = Array.from(document.querySelectorAll('.days-checkboxes input:checked')).map(d => Number(d.value));
+    function renderEvents() {
+      eventList.innerHTML = '';
+      const activeEvents = checkExpiredEvents();
+      activeEvents.forEach((ev, idx) => {
+        const div = document.createElement('div');
+        div.className = 'event';
+        div.innerHTML = `<strong>${ev.title}</strong><br>${ev.date} ${ev.time}`;
+        if (ev.repeat) {
+          div.innerHTML += `<div class="repeat">Повторяется: ${ev.days.length ? ev.days.join(', ') : 'раз в неделю'}</div>`;
+        }
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '×';
+        delBtn.className = 'delete-btn';
+        delBtn.addEventListener('click', () => {
+          events.splice(idx, 1);
+          renderEvents();
+        });
+        div.appendChild(delBtn);
+        eventList.appendChild(div);
+      });
+    }
 
-      if (!name || !date || !time) {
+    addEventBtn.addEventListener('click', () => {
+      const title = document.getElementById('eventTitle').value.trim();
+      const date = document.getElementById('eventDate').value;
+      const time = document.getElementById('eventTime').value;
+      const repeat = isRepeat.checked;
+      const days = Array.from(document.getElementById('repeatDays').selectedOptions).map(o => o.value);
+
+      if (!title || !date || !time) {
         alert('Заполните все поля!');
         return;
       }
 
-      const event = { name, date, time, repeat, days, id: events.length + 1 };
-      events.push(event);
-      addEventToCalendar(event);
+      events.push({ title, date, time, repeat, days });
+      renderEvents();
 
-      // Отправка на бэкенд
-      fetch('/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(event)
-      }).then(res => res.json())
-        .then(() => {
-          tg.sendData(JSON.stringify(event));
-        });
-
-      // Очистка формы
-      document.getElementById('event-name').value = '';
-      document.getElementById('event-date').value = '';
-      document.getElementById('event-time').value = '';
-      repeatCheckbox.checked = false;
+      // Сброс формы
+      document.getElementById('eventTitle').value = '';
+      document.getElementById('eventDate').value = '';
+      document.getElementById('eventTime').value = '';
+      isRepeat.checked = false;
       repeatOptions.style.display = 'none';
-      document.querySelectorAll('.days-checkboxes input').forEach(d => d.checked = false);
     });
+
+    // Проверяем и удаляем устаревшие события каждые 30 секунд
+    setInterval(renderEvents, 30000);
   </script>
 </body>
 </html>
