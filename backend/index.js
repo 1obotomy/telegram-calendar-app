@@ -1,106 +1,71 @@
-import express from 'express';
-import { Telegraf } from 'telegraf';
-import bodyParser from 'body-parser';
-import { v4 as uuidv4 } from 'uuid';
+import express from "express";
+import cors from "cors";
+import { v4 as uuidv4 } from "uuid";
+import dayjs from "dayjs";
+import cron from "node-cron";
+import TelegramBot from "node-telegram-bot-api";
+import fs from "fs";
 
-// ---- Настройки ----
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const WEBHOOK_URL = 'https://telegram-calendar-app-1.onrender.com';
-const PORT = process.env.PORT || 10000;
+const botToken = process.env.BOT_TOKEN;
+const chatId = process.env.GROUP_ID; // Можно указать id группы- или личного чата
+const bot = new TelegramBot(botToken);
 
-const bot = new Telegraf(BOT_TOKEN);
-
-// ---- Хранилище событий ----
-let events = []; // { id, title, date, time, repeat: { weekly: true, days: [1,3,5] }, done: false }
-
-// ---- Миниапп и кнопка ----
-bot.start((ctx) => {
-  ctx.reply('Добро пожаловать в ваш календарь!', {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          {
-            text: 'Открыть миниапп',
-            web_app: { url: `${WEBHOOK_URL}/miniapp` },
-          },
-        ],
-      ],
-    },
-  });
-});
-
-// ---- Express сервер ----
 const app = express();
-app.use(bodyParser.json());
+app.use(cors());
+app.use(express.json());
 
-// Редирект с корня на миниапп
-app.get('/', (req, res) => {
-  res.redirect('/miniapp');
+const EVENTS_FILE = "./events.json";
+function loadEvents() {
+  if(!fs.existsSync(EVENTS_FILE)) return [];
+  return JSON.parse(fs.readFileSync(EVENTS_FILE));
+}
+function saveEvents(events) {
+  fs.writeFileSync(EVENTS_FILE, JSON.stringify(events,null,2));
+}
+
+// API
+app.get("/api/events", (_,res)=>{
+  res.json(loadEvents().filter(ev=>!ev.done));
 });
 
-// Статическая отдача миниаппа
-app.use('/miniapp', express.static('frontend'));
+app.post("/api/events", (req,res)=>{
+  const events = loadEvents();
+  const event = { id: uuidv4(), ...req.body, done: false };
+  events.push(event);
+  saveEvents(events);
+  res.json(event);
+});
 
-// Webhook endpoint для Telegram
-app.post(`/webhook/${bot.secretPathComponent()}`, (req, res) => {
-  bot.handleUpdate(req.body, res);
+app.delete("/api/events/:id", (req,res)=>{
+  let events = loadEvents();
+  events = events.filter(ev=>ev.id!==req.params.id);
+  saveEvents(events);
   res.sendStatus(200);
 });
 
-// ---- API для миниаппа ----
-
-// Получение списка активных событий
-app.get('/miniapp/events', (req, res) => {
-  // только несостоявшиеся
-  const active = events.filter(e => !e.done);
-  res.json(active);
-});
-
-// Добавление нового события
-app.post('/miniapp/events', (req, res) => {
-  const { title, date, time, repeat } = req.body;
-  if (!title || !date || !time) return res.status(400).json({ error: 'title, date и time обязательны' });
-
-  const event = {
-    id: uuidv4(),
-    title,
-    date,
-    time,
-    repeat: repeat || null,
-    done: false,
-  };
-
-  events.push(event);
-  res.json({ success: true, event });
-});
-
-// Удаление события
-app.delete('/miniapp/events/:id', (req, res) => {
-  const { id } = req.params;
-  events = events.filter(e => e.id !== id);
-  res.json({ success: true });
-});
-
-// ---- Автоочистка выполненных событий ----
-setInterval(() => {
-  const now = new Date();
-  events.forEach(e => {
-    const eventDate = new Date(`${e.date}T${e.time}`);
-    if (!e.done && eventDate <= now && !e.repeat) {
-      e.done = true;
+// Фоновая задача: проверять события каждую минуту и отправлять уведомления за 30 мин
+cron.schedule('* * * * *', () => {
+  const events = loadEvents();
+  const now = dayjs();
+  for(const ev of events) {
+    // Разовые
+    if(ev.type==="once" && !ev.done) {
+      const eventTime = dayjs(ev.date);
+      if(eventTime.diff(now,"minute")===30) {
+        bot.sendMessage(chatId, `Напоминание: ${ev.title} через 30 минут!`);
+        ev.done = true;
+      }
     }
-  });
-}, 60 * 1000); // проверяем каждую минуту
-
-// ---- Запуск сервера ----
-app.listen(PORT, async () => {
-  console.log(`Server started on port ${PORT}`);
-
-  // Устанавливаем webhook
-  try {
-    await bot.telegram.setWebhook(`${WEBHOOK_URL}/webhook/${bot.secretPathComponent()}`);
-    console.log('Webhook установлен!');
-  } catch (err) {
-    console.error('Ошибка установки webhook:', err);
+    // Повторяющиеся
+    if(ev.type==="repeat") {
+      const weekday = now.day(); // 0-Вс, ... 1-Пн
+      if(ev.repeatDays.includes(weekday) && now.hour()===dayjs(ev.date).hour() && now.minute()===dayjs(ev.date).minute()) {
+        bot.sendMessage(chatId, `Напоминание: ${ev.title} через 30 минут!`);
+      }
+    }
   }
+  saveEvents(events);
 });
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, ()=>console.log("Backend running on "+PORT, '| bot target:', chatId));
