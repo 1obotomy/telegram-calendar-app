@@ -13,8 +13,20 @@ app.use(bodyParser.json());
 
 const TOKEN = process.env.TOKEN;
 const GROUP_ID = process.env.GROUP_ID;
+const URL = process.env.URL; // URL сервиса Render
 
-const bot = new TelegramBot(TOKEN, { polling: true });
+// создаём бот без polling
+const bot = new TelegramBot(TOKEN);
+
+// устанавливаем webhook
+await bot.setWebHook(`${URL}/bot${TOKEN}`);
+console.log(`Webhook установлен на ${URL}/bot${TOKEN}`);
+
+// маршрут для получения апдейтов от Telegram
+app.post(`/bot${TOKEN}`, (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
+});
 
 // создание напоминания
 app.post("/reminder", (req, res) => {
@@ -39,5 +51,5 @@ app.get("/reminders", (req, res) => {
 // фронтенд
 app.use(express.static(path.join(__dirname, "../frontend")));
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
