@@ -6,8 +6,8 @@ import cron from "node-cron";
 import TelegramBot from "node-telegram-bot-api";
 import fs from "fs";
 
-const botToken = "ТВОЙ_TELEGRAM_BOT_TOKEN";
-const chatId = "ID_ЧАТА_ПОЛЬЗОВАТЕЛЯ"; // Можно получать из front, если нужна поддержка мультипользователей
+const botToken = process.env.BOT_TOKEN;
+const chatId = process.env.GROUP_ID; // Можно указать id группы- или личного чата
 const bot = new TelegramBot(botToken);
 
 const app = express();
@@ -68,4 +68,4 @@ cron.schedule('* * * * *', () => {
 });
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, ()=>console.log("Backend running on "+PORT));
+app.listen(PORT, ()=>console.log("Backend running on "+PORT, '| bot target:', chatId));
