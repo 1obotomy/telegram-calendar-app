@@ -1,3 +1,4 @@
+// backend/index.js
 const express = require('express');
 const bodyParser = require('body-parser');
 const TelegramBot = require('node-telegram-bot-api');
@@ -20,15 +21,27 @@ bot.setWebHook(`${URL}/bot${TOKEN}`);
 
 let reminders = [];
 
+// ✅ Устанавливаем кнопку "📅 Open App" в меню бота
+bot.setChatMenuButton({
+  menu_button: {
+    type: "web_app",
+    text: "📅 Open App",
+    web_app: { url: URL }
+  }
+});
+
+// Webhook endpoint
 app.post(`/bot${TOKEN}`, (req, res) => {
   bot.processUpdate(req.body);
   res.sendStatus(200);
 });
 
+// Команда /start
 bot.onText(/\/start/, (msg) => {
   bot.sendMessage(msg.chat.id, 'Привет! Я календарь-бот. Добавляй напоминания!');
 });
 
+// Добавление напоминания
 bot.onText(/\/add (.+)/, (msg, match) => {
   const text = match[1];
   const time = Date.now() + 60000; // через 1 минуту
@@ -36,6 +49,7 @@ bot.onText(/\/add (.+)/, (msg, match) => {
   bot.sendMessage(msg.chat.id, `Напоминание "${text}" добавлено!`);
 });
 
+// Проверка и отправка напоминаний каждые 10 секунд
 setInterval(() => {
   const now = Date.now();
   reminders.forEach(r => {
@@ -46,13 +60,14 @@ setInterval(() => {
   });
 }, 10000);
 
+// Список напоминаний
 bot.onText(/\/list/, (msg) => {
   if (!reminders.length) return bot.sendMessage(msg.chat.id, 'Нет напоминаний.');
   const list = reminders.map(r => `${r.sent ? '✅' : '🕒'} ${r.text}`).join('\n');
   bot.sendMessage(msg.chat.id, list);
 });
 
-// 👇 Новый маршрут: список напоминаний в браузере
+// Веб-интерфейс для списка напоминаний
 app.get("/", (req, res) => {
   if (!reminders.length) {
     return res.send("<h2>Нет напоминаний</h2>");
