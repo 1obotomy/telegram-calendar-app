@@ -1,44 +1,56 @@
 import express from 'express';
-import bodyParser from 'body-parser';
 import { Telegraf } from 'telegraf';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const app = express();
-app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, '../frontend'))); // статические файлы фронтенда
-
-// Telegram Bot
+// ---- Настройки ----
 const BOT_TOKEN = '8381157293:AAHsoo8VMQ9kEmPMCbGbwUO1P17jwmmFM6g';
+const WEBHOOK_URL = 'https://telegram-calendar-app-1.onrender.com'; // ваш домен
+const PORT = process.env.PORT || 10000;
+
 const bot = new Telegraf(BOT_TOKEN);
 
+// ---- Миниапп и кнопка ----
 bot.start((ctx) => {
-  ctx.reply('Добро пожаловать! Ваш календарь готов.', {
+  ctx.reply('Добро пожаловать в ваш календарь!', {
     reply_markup: {
       inline_keyboard: [
-        [{ text: 'Open Calendar', web_app: { url: 'https://telegram-calendar-app-1.onrender.com' } }]
-      ]
-    }
+        [
+          {
+            text: 'Открыть миниапп',
+            web_app: { url: `${WEBHOOK_URL}/miniapp` },
+          },
+        ],
+      ],
+    },
   });
 });
 
-bot.launch();
-
-// Получение данных из миниаппа
-app.post('/save', (req, res) => {
-  console.log('Данные из миниаппа:', req.body);
-  res.send({ status: 'ok' });
+// ---- Пример обработки сообщений (можно расширять для событий) ----
+bot.on('text', (ctx) => {
+  ctx.reply('Ваше сообщение получено: ' + ctx.message.text);
 });
 
-// Отдаем фронтенд по корню
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/index.html'));
+// ---- Express сервер ----
+const app = express();
+app.use(express.json());
+
+// Webhook endpoint для Telegram
+app.post(`/webhook/${bot.secretPathComponent()}`, (req, res) => {
+  bot.handleUpdate(req.body, res);
+  res.sendStatus(200);
 });
 
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
+// Статическая отдача миниаппа
+app.use('/miniapp', express.static('frontend')); // frontend - папка с HTML/JS миниаппа
+
+// Запуск сервера
+app.listen(PORT, async () => {
   console.log(`Server started on port ${PORT}`);
+
+  // Устанавливаем webhook в Telegram
+  try {
+    await bot.telegram.setWebhook(`${WEBHOOK_URL}/webhook/${bot.secretPathComponent()}`);
+    console.log('Webhook установлен!');
+  } catch (err) {
+    console.error('Ошибка установки webhook:', err);
+  }
 });
