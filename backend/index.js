@@ -2,7 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const TelegramBot = require('node-telegram-bot-api');
 
-const TOKEN = 'YOUR_BOT_TOKEN'; // вставь свой токен
+const TOKEN = '8381157293:AAHsoo8VMQ9kEmPMCbGbwUO1P17jwmmFM6g'; // вставь свой токен
 const WEB_APP_URL = 'https://telegram-calendar-app-1.onrender.com'; // URL твоего миниаппа
 
 const bot = new TelegramBot(TOKEN, { polling: true });
