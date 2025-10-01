@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Календарь напоминаний</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <h2>Создать напоминание</h2>
+  <form id="reminderForm">
+    <label>Дата и время:</label>
+    <input type="datetime-local" id="dateTime" required>
+    <label>Текст:</label>
+    <input type="text" id="text" placeholder="Введите напоминание" required>
+    <button type="submit">Создать</button>
+  </form>
+  <script src="script.js"></script>
+</body>
+</html>
