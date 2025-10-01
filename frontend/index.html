@@ -3,43 +3,121 @@
 <head>
   <meta charset="UTF-8">
   <title>Telegram Calendar Mini App</title>
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
+    body { font-family: Arial, sans-serif; padding: 10px; max-width: 600px; margin: auto; }
+    input, select, button { display: block; margin: 5px 0; padding: 6px; width: 100%; box-sizing: border-box; }
+    label { font-weight: bold; margin-top: 10px; }
+    #repeat-options { margin-top: 5px; }
+    .days-checkboxes label { display: inline-block; margin-right: 5px; font-weight: normal; }
     #calendar { margin-top: 20px; }
-    button { padding: 10px 15px; margin-top: 10px; }
   </style>
 </head>
 <body>
-  <h1>Добро пожаловать в ваш календарь!</h1>
-  <p>Выберите дату:</p>
-  <input type="date" id="calendar">
-  <button id="save-btn">Сохранить дату</button>
+  <h1>Календарь событий</h1>
 
+  <label>Название события</label>
+  <input type="text" id="event-name" placeholder="Введите название">
+
+  <label>Дата</label>
+  <input type="date" id="event-date">
+
+  <label>Время</label>
+  <input type="time" id="event-time">
+
+  <label><input type="checkbox" id="repeat-event"> Повторяемое событие</label>
+
+  <div id="repeat-options" style="display:none;">
+    <label>Выберите дни недели:</label>
+    <div class="days-checkboxes">
+      <label><input type="checkbox" value="1">Пн</label>
+      <label><input type="checkbox" value="2">Вт</label>
+      <label><input type="checkbox" value="3">Ср</label>
+      <label><input type="checkbox" value="4">Чт</label>
+      <label><input type="checkbox" value="5">Пт</label>
+      <label><input type="checkbox" value="6">Сб</label>
+      <label><input type="checkbox" value="0">Вс</label>
+    </div>
+  </div>
+
+  <button id="save-btn">Сохранить событие</button>
+
+  <div id="calendar"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
   <script>
     const tg = window.Telegram.WebApp;
     tg.ready();
 
+    const repeatCheckbox = document.getElementById('repeat-event');
+    const repeatOptions = document.getElementById('repeat-options');
     const saveBtn = document.getElementById('save-btn');
-    const calendar = document.getElementById('calendar');
+    const calendarEl = document.getElementById('calendar');
+
+    let events = [];
+
+    repeatCheckbox.addEventListener('change', () => {
+      repeatOptions.style.display = repeatCheckbox.checked ? 'block' : 'none';
+    });
+
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+      initialView: 'dayGridMonth',
+      editable: true,
+      selectable: true,
+      events: [],
+      eventClick: function(info) {
+        if (confirm(`Удалить событие "${info.event.title}"?`)) {
+          info.event.remove();
+          events = events.filter(e => e.id !== info.event.id);
+        }
+      }
+    });
+    calendar.render();
+
+    function addEventToCalendar(ev) {
+      let eventData = {
+        id: String(events.length + 1),
+        title: ev.name + (ev.repeat ? ' 🔁' : ''),
+        start: `${ev.date}T${ev.time}`,
+        allDay: false,
+        backgroundColor: ev.repeat ? '#007bff' : '#28a745'
+      };
+      calendar.addEvent(eventData);
+    }
 
     saveBtn.addEventListener('click', () => {
-      const selectedDate = calendar.value;
-      if (!selectedDate) {
-        alert('Выберите дату!');
+      const name = document.getElementById('event-name').value.trim();
+      const date = document.getElementById('event-date').value;
+      const time = document.getElementById('event-time').value;
+      const repeat = repeatCheckbox.checked;
+      const days = Array.from(document.querySelectorAll('.days-checkboxes input:checked')).map(d => Number(d.value));
+
+      if (!name || !date || !time) {
+        alert('Заполните все поля!');
         return;
       }
 
-      // Отправляем данные бэкенду
+      const event = { name, date, time, repeat, days, id: events.length + 1 };
+      events.push(event);
+      addEventToCalendar(event);
+
+      // Отправка на бэкенд
       fetch('/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: selectedDate })
-      })
-      .then(res => res.json())
-      .then(data => {
-        tg.sendData(JSON.stringify({ date: selectedDate })); // Telegram WebApp API
-        alert('Дата сохранена!');
-      });
+        body: JSON.stringify(event)
+      }).then(res => res.json())
+        .then(() => {
+          tg.sendData(JSON.stringify(event));
+        });
+
+      // Очистка формы
+      document.getElementById('event-name').value = '';
+      document.getElementById('event-date').value = '';
+      document.getElementById('event-time').value = '';
+      repeatCheckbox.checked = false;
+      repeatOptions.style.display = 'none';
+      document.querySelectorAll('.days-checkboxes input').forEach(d => d.checked = false);
     });
   </script>
 </body>
