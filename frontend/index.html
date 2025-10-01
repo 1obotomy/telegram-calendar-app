@@ -1,11 +1,26 @@
-<h2>Создать напоминание</h2>
-<form id="reminderForm">
-  <label>Дата и время:</label>
-  <input type="datetime-local" id="dateTime" required>
-  <label>Текст:</label>
-  <input type="text" id="text" placeholder="Введите напоминание" required>
-  <button type="submit">Создать</button>
-</form>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Telegram Mini App</title>
+</head>
+<body>
+<h1>Привет из миниаппа!</h1>
+<div id="reminders"></div>
 
-<h2>Мои напоминания</h2>
-<ul id="remindersList"></ul>
+<script>
+  const reminders = [
+    { text: 'Проверить почту', status: 'upcoming' },
+    { text: 'Созвон с командой', status: 'done' }
+  ];
+
+  const container = document.getElementById('reminders');
+  reminders.forEach(r => {
+    const div = document.createElement('div');
+    div.textContent = `${r.text} — ${r.status}`;
+    container.appendChild(div);
+  });
+</script>
+</body>
+</html>
