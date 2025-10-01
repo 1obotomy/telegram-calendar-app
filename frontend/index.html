@@ -1,26 +1,46 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Telegram Mini App</title>
+  <meta charset="UTF-8">
+  <title>Telegram Calendar Mini App</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #calendar { margin-top: 20px; }
+    button { padding: 10px 15px; margin-top: 10px; }
+  </style>
 </head>
 <body>
-<h1>Привет из миниаппа!</h1>
-<div id="reminders"></div>
+  <h1>Добро пожаловать в ваш календарь!</h1>
+  <p>Выберите дату:</p>
+  <input type="date" id="calendar">
+  <button id="save-btn">Сохранить дату</button>
 
-<script>
-  const reminders = [
-    { text: 'Проверить почту', status: 'upcoming' },
-    { text: 'Созвон с командой', status: 'done' }
-  ];
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
 
-  const container = document.getElementById('reminders');
-  reminders.forEach(r => {
-    const div = document.createElement('div');
-    div.textContent = `${r.text} — ${r.status}`;
-    container.appendChild(div);
-  });
-</script>
+    const saveBtn = document.getElementById('save-btn');
+    const calendar = document.getElementById('calendar');
+
+    saveBtn.addEventListener('click', () => {
+      const selectedDate = calendar.value;
+      if (!selectedDate) {
+        alert('Выберите дату!');
+        return;
+      }
+
+      // Отправляем данные бэкенду
+      fetch('/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: selectedDate })
+      })
+      .then(res => res.json())
+      .then(data => {
+        tg.sendData(JSON.stringify({ date: selectedDate })); // Telegram WebApp API
+        alert('Дата сохранена!');
+      });
+    });
+  </script>
 </body>
 </html>
