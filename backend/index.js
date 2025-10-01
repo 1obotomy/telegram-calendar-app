@@ -1,46 +1,55 @@
 const express = require('express');
-const bodyParser = require('body-parser');
-const TelegramBot = require('node-telegram-bot-api');
+const { Telegraf, Markup } = require('telegraf');
+const path = require('path');
 
-const TOKEN = '8381157293:AAHsoo8VMQ9kEmPMCbGbwUO1P17jwmmFM6g'; // вставь свой токен
-const WEB_APP_URL = 'https://telegram-calendar-app-1.onrender.com'; // URL твоего миниаппа
-
-const bot = new TelegramBot(TOKEN, { polling: true });
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-app.use(bodyParser.json());
+// ------------------
+// Телеграм бот
+// ------------------
+const BOT_TOKEN = 'ВАШ_АКТУАЛЬНЫЙ_ТОКЕН_ЗДЕСЬ';
+const bot = new Telegraf(BOT_TOKEN);
 
-// Хэндлер для webhook (если понадобится)
-app.post(`/bot${TOKEN}`, (req, res) => {
-  bot.processUpdate(req.body);
-  res.sendStatus(200);
+// Список напоминаний
+let reminders = [
+  { text: 'Проверить почту', status: 'upcoming' },
+  { text: 'Созвон с командой', status: 'done' }
+];
+
+// Команда /start
+bot.start((ctx) => {
+  ctx.reply(
+    'Привет! Нажми кнопку ниже, чтобы открыть миниапп:',
+    Markup.inlineKeyboard([
+      Markup.button.url('Открыть Mini App', 'https://telegram-calendar-app-1.onrender.com')
+    ])
+  );
 });
 
-// Обработчик команды /start
-bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, "Привет! Я календарь-бот.\nНажми кнопку ниже, чтобы открыть миниапп:", {
-    reply_markup: {
-      inline_keyboard: [[
-        { text: "📅 Open App", web_app: { url: WEB_APP_URL } }
-      ]]
-    }
-  });
+// Отправка статуса напоминаний через команду /reminders
+bot.command('reminders', (ctx) => {
+  const message = reminders.map(r => `${r.text} — ${r.status}`).join('\n');
+  ctx.reply(message);
 });
 
-// Пример простой команды для добавления напоминания
-bot.onText(/\/add (.+)/, (msg, match) => {
-  const reminder = match[1];
-  // Здесь можно сохранять напоминания в память или базу
-  bot.sendMessage(msg.chat.id, `Напоминание добавлено: ${reminder}`);
+// Запуск бота (polling)
+bot.launch()
+  .then(() => console.log('Bot started'))
+  .catch(console.error);
+
+// ------------------
+// Раздача фронтенда для миниаппа
+// ------------------
+app.use(express.static(path.join(__dirname, '../frontend')));
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
-// Пример проверки напоминаний (можно расширять)
-setInterval(() => {
-  // Проверяем напоминания и отправляем, если пришло время
-  // bot.sendMessage(chatId, "Напоминание!");
-}, 60000); // каждые 60 секунд
-
+// ------------------
+// Запуск Express
+// ------------------
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on ${PORT}`);
 });
