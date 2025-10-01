@@ -52,6 +52,42 @@ bot.onText(/\/list/, (msg) => {
   bot.sendMessage(msg.chat.id, list);
 });
 
+// 👇 Новый маршрут: список напоминаний в браузере
+app.get("/", (req, res) => {
+  if (!reminders.length) {
+    return res.send("<h2>Нет напоминаний</h2>");
+  }
+
+  const upcoming = reminders.filter(r => !r.sent);
+  const done = reminders.filter(r => r.sent);
+
+  res.send(`
+    <html>
+      <head>
+        <title>Telegram Calendar</title>
+        <style>
+          body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
+          h2 { color: #333; }
+          ul { list-style: none; padding: 0; }
+          li { background: white; margin: 5px 0; padding: 10px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+          .done { color: green; }
+          .upcoming { color: orange; }
+        </style>
+      </head>
+      <body>
+        <h2>Предстоящие напоминания</h2>
+        <ul>
+          ${upcoming.map(r => `<li class="upcoming">🕒 ${r.text}</li>`).join("") || "<li>Нет</li>"}
+        </ul>
+        <h2>Состоявшиеся напоминания</h2>
+        <ul>
+          ${done.map(r => `<li class="done">✅ ${r.text}</li>`).join("") || "<li>Нет</li>"}
+        </ul>
+      </body>
+    </html>
+  `);
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
