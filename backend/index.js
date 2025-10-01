@@ -15,6 +15,7 @@ if (!TOKEN || !GROUP_ID || !URL) {
 
 const app = express();
 app.use(bodyParser.json());
+app.use(express.urlencoded({ extended: true })); // для form POST
 
 const bot = new TelegramBot(TOKEN, { webHook: true });
 bot.setWebHook(`${URL}/bot${TOKEN}`);
@@ -41,7 +42,7 @@ bot.onText(/\/start/, (msg) => {
   bot.sendMessage(msg.chat.id, 'Привет! Я календарь-бот. Добавляй напоминания!');
 });
 
-// Добавление напоминания
+// Добавление напоминания (через команду)
 bot.onText(/\/add (.+)/, (msg, match) => {
   const text = match[1];
   const time = Date.now() + 60000; // через 1 минуту
@@ -60,19 +61,15 @@ setInterval(() => {
   });
 }, 10000);
 
-// Список напоминаний
+// Список напоминаний в чате
 bot.onText(/\/list/, (msg) => {
   if (!reminders.length) return bot.sendMessage(msg.chat.id, 'Нет напоминаний.');
   const list = reminders.map(r => `${r.sent ? '✅' : '🕒'} ${r.text}`).join('\n');
   bot.sendMessage(msg.chat.id, list);
 });
 
-// Веб-интерфейс для списка напоминаний
+// 📌 HTML-интерфейс (список + форма добавления)
 app.get("/", (req, res) => {
-  if (!reminders.length) {
-    return res.send("<h2>Нет напоминаний</h2>");
-  }
-
   const upcoming = reminders.filter(r => !r.sent);
   const done = reminders.filter(r => r.sent);
 
@@ -87,6 +84,10 @@ app.get("/", (req, res) => {
           li { background: white; margin: 5px 0; padding: 10px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
           .done { color: green; }
           .upcoming { color: orange; }
+          form { margin-top: 20px; background: #fff; padding: 15px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);}
+          input, button { padding: 10px; margin: 5px 0; width: 100%; border: 1px solid #ccc; border-radius: 4px; }
+          button { background: #007bff; color: #fff; border: none; cursor: pointer; }
+          button:hover { background: #0056b3; }
         </style>
       </head>
       <body>
@@ -98,9 +99,25 @@ app.get("/", (req, res) => {
         <ul>
           ${done.map(r => `<li class="done">✅ ${r.text}</li>`).join("") || "<li>Нет</li>"}
         </ul>
+
+        <h2>➕ Добавить напоминание</h2>
+        <form method="POST" action="/add">
+          <input type="text" name="text" placeholder="Текст напоминания" required />
+          <button type="submit">Добавить</button>
+        </form>
       </body>
     </html>
   `);
+});
+
+// 📌 Обработка формы добавления
+app.post("/add", (req, res) => {
+  const { text } = req.body;
+  if (text) {
+    const time = Date.now() + 60000; // через 1 минуту
+    reminders.push({ text, time, sent: false });
+  }
+  res.redirect("/"); // после добавления возвращаем на главную
 });
 
 app.listen(PORT, () => {
